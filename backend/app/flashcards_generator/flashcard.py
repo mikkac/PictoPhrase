@@ -4,10 +4,13 @@ import os
 from dataclasses import asdict, dataclass
 
 from dotenv import find_dotenv, load_dotenv
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
 from langchain.prompts import ChatPromptTemplate
-
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain_community.utilities.dalle_image_generator import DallEAPIWrapper
+from openai import OpenAI
 
 @dataclass
 class Flashcard:
@@ -116,6 +119,7 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             llm_model (str): The name of the language model to use.
         """
         self.chat = ChatOpenAI(temperature=0.0, model=llm_model, api_key=api_key)
+        self.image_gen = OpenAI(api_key=api_key)
 
         input_expression_schema = ResponseSchema(
             name="input_expression",
@@ -179,6 +183,44 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             template=self.flashcard_generator_template
         )
 
+    def generate_flashcard_image(self, expression: str) -> str:
+        """
+        Generates an image representation of the input expression using the DALL-E model.
+
+        Args:
+            expression (str): The expression to be used for generating the image.
+        
+        Returns:
+            str: URL of the generated image.
+        """
+        response = self.image_gen.images.generate(
+            model="dall-e-3",
+            prompt=f"""
+            Create a visually engaging and educational image to be used on a flashcard, 
+            capturing the essence of the given expression in a straightforward and non-extravagant manner. 
+            The image should be easily identifiable and closely related to the expression, 
+            facilitating quick comprehension. The generated image shall not contain any text. 
+            If the expression contains elements that might not align with content guidelines, 
+            creatively adapt the concept to ensure it complies while maintaining a clear 
+            connection to the original meaning. 
+            This adaptation should be subtle, employing visual metaphors or related symbols 
+            to convey the expression's essence without explicit or potentially sensitive content.
+            Expression: {expression}
+            """,
+
+            # prompt=f"""
+            # Your task is to generate image that will be used as a flashcard.
+            # The image should not be pompous, but should clearly resemble the expression.
+            # If the expression violates the policy rules, generate softened version of the expression, 
+            # but do not embed any text in it and try to make it immediately associated with the expression.
+            # Expression: {expression}
+            # """,
+            size="1024x1024",
+            quality="standard",
+            n=1,
+        )
+        return response.data[0].url
+
     def generate_flashcard(
         self, input_exp: str, input_lang: str, output_lang: str
     ) -> Flashcard:
@@ -218,6 +260,8 @@ def main():
 
     generator = FlashcardGeneratorOpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
+    print(generator.generate_flashcard_image("it absorbed me"))
+
     input_expressions = [
         "cruel",
         "let someone off the hook",
@@ -231,12 +275,14 @@ def main():
 
     flashcards = Flashcards([])
 
-    for input_expression in input_expressions:
-        flashcard = generator.generate_flashcard(
-            input_expression, input_language, output_language
-        )
-        print(flashcard)
-        flashcards.data.append(flashcard)
+    # for input_expression in input_expressions:
+    #     flashcard = generator.generate_flashcard(
+    #         input_expression, input_language, output_language
+    #     )
+    #     print(flashcard)
+    #     flashcards.data.append(flashcard)
 
+
+    print()
 if __name__ == "__main__":
     main()
