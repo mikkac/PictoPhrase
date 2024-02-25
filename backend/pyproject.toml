@@ -18,6 +18,13 @@ pyjwt = { extras = ["crypto"], version = "^2.8.0" }
 python-multipart = "^0.0.6"
 sqlalchemy = "^2.0.23"
 
+langchain = "^0.1.9"
+langchain-openai = "^0.0.7"
+openai = "^1.12.0"
+python-dotenv = "^1.0.0"
+streamlit = "^1.31.1"
+
+
 [tool.poetry.group.dev.dependencies]
 black = "^23.10.1"
 coverage = "^7.3.2"
