@@ -2,7 +2,7 @@
 import json
 import os
 from dataclasses import asdict, dataclass
-
+from typing import Optional
 from dotenv import find_dotenv, load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
@@ -11,87 +11,37 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.utilities.dalle_image_generator import DallEAPIWrapper
 from openai import OpenAI
+from pydantic import BaseModel, TypeAdapter, parse_obj_as
 
-@dataclass
-class Flashcard:
-    """
-    Represents a flashcard containing language translation information.
-
-    Attributes:
-        input_expression (str): The expression in the input language.
-        input_language (str): The language of the input expression.
-        output_expression (str): The translated expression in the output language.
-        output_language (str): The language of the output expression.
-        example_usage (str): An example usage of the input expression in a sentence.
-    """
-
+class Flashcard(BaseModel):
     input_expression: str
     input_language: str
     output_expression: str
     output_language: str
-    example_usage: str
+    example_usage_input_language: str
+    example_usage_output_language: str
+    image_url: Optional[str] = None
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "Flashcard":
-        """
-        Creates a Flashcard instance from a dictionary of attributes.
-
-        Args:
-            data (dict): A dictionary containing flashcard attributes.
-
-        Returns:
-            Flashcard: An instance of Flashcard.
-        """
-        return cls(
-            input_expression=data.get("input_expression", None),
-            input_language=data.get("input_language", None),
-            output_expression=data.get("output_expression", None),
-            output_language=data.get("output_language", None),
-            example_usage=data.get("example_usage", None),
-        )
-
-
-@dataclass
-class Flashcards:
-    """
-    Represents a collection of Flashcard instances.
-
-    Attributes:
-        data (list[Flashcard]): A list of Flashcard instances.
-    """
-
+class Flashcards(BaseModel):
     data: list[Flashcard]
 
     def as_json(self) -> dict:
         """
         Converts the collection of Flashcard instances to a JSON format.
-
-        Returns:
-            dict: A dictionary representing the flashcards in JSON format.
         """
-        return {"flashcards": [asdict(card) for card in self.data]}
+        return {"flashcards": [card.model_dump() for card in self.data]}
 
     @classmethod
     def import_from_json(cls, data: dict) -> "Flashcards":
         """
-        Creates a Flashcards instance from a JSON file.
-
-        Args:
-            data (file): A JSON file containing flashcard data.
-
-        Returns:
-            Flashcards: An instance of Flashcards containing the imported data.
+        Creates a Flashcards instance from a JSON representation.
         """
-        data = json.load(data)
-        flashcard_objects = [Flashcard(**card) for card in data["flashcards"]]
+        flashcard_objects = TypeAdapter.validate_python(list[Flashcard], data["flashcards"])
         return cls(data=flashcard_objects)
 
     def __len__(self) -> int:
         """
         Returns the number of Flashcard instances in the collection.
-
-        Returns:
-            int: The number of Flashcard instances.
         """
         return len(self.data)
 
@@ -132,6 +82,12 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             type="str",
             description="Language of the input expression.",
         )
+        example_usage_input_language_schema = ResponseSchema(
+            name="example_usage_input_language",
+            type="str",
+            description="Example usage of input expression, used to give the user some "
+            "example context where it could be used. Limited to one sentence.",
+        )
         output_expression_schema = ResponseSchema(
             name="output_expression",
             type="str",
@@ -142,8 +98,8 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             type="str",
             description="Language of the output expression.",
         )
-        example_usage_schema = ResponseSchema(
-            name="example_usage",
+        example_usage_output_language_schema = ResponseSchema(
+            name="example_usage_output_language",
             type="str",
             description="Example usage of input expression, used to give the user some "
             "example context where it could be used. Limited to one sentence.",
@@ -152,9 +108,10 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
         response_schemas = [
             input_expression_schema,
             input_language_schema,
+            example_usage_input_language_schema,
             output_expression_schema,
             output_language_schema,
-            example_usage_schema,
+            example_usage_output_language_schema,
         ]
 
         self.output_parser = StructuredOutputParser.from_response_schemas(
@@ -169,9 +126,11 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
 
         input_language: Language of the input expression
 
-        output_expression: Refined input expression translated to {output_language} language. Provide 2 alternatives, separated with 'slash' sign (and space before & after the sign).
+        output_expression: Refined input expression translated to {output_language} language. Provide 2 alternatives, separated with 'slash' sign (and space before & after the sign)
 
-        example_usage: Example usage of input expression, used to give the user some example context where it could be used. Limited to one sentence.
+        example_usage_input_language: Example usage of input expression, used to give the user some example context where it could be used. Limited to one sentence. Written in input_language
+        
+        example_usage_output_language: Same as example_usage_input_language but written in output_language
 
         input_expression: {input_expression}
         input_language: {input_language}
@@ -207,15 +166,7 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             to convey the expression's essence without explicit or potentially sensitive content.
             Expression: {expression}
             """,
-
-            # prompt=f"""
-            # Your task is to generate image that will be used as a flashcard.
-            # The image should not be pompous, but should clearly resemble the expression.
-            # If the expression violates the policy rules, generate softened version of the expression, 
-            # but do not embed any text in it and try to make it immediately associated with the expression.
-            # Expression: {expression}
-            # """,
-            size="1024x1024",
+            size="1792x1024",
             quality="standard",
             n=1,
         )
@@ -247,9 +198,9 @@ class FlashcardGeneratorOpenAI: # pylint: disable=R0903
             output_language=output_lang,
             format_instructions=self.format_instructions,
         )
-        response = self.chat(messages)
+        response = self.chat.invoke(messages)
         flashcard_dict = self.output_parser.parse(response.content)
-        return Flashcard.from_dict(flashcard_dict)
+        return Flashcard(**flashcard_dict)
 
 
 def main():
@@ -260,29 +211,26 @@ def main():
 
     generator = FlashcardGeneratorOpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    print(generator.generate_flashcard_image("it absorbed me"))
-
     input_expressions = [
-        "cruel",
-        "let someone off the hook",
-        "it absorbed me",
-        "get my thoughts in order",
-        "crude",
+        # "cruel",
+        # "let someone off the hook",
+        # "it absorbed me",
+        # "get my thoughts in order",
+        # "crude",
         "pore over",
     ]
     input_language = "English"
     output_language = "Polish"
 
-    flashcards = Flashcards([])
+    flashcards = Flashcards(data=[])
 
-    # for input_expression in input_expressions:
-    #     flashcard = generator.generate_flashcard(
-    #         input_expression, input_language, output_language
-    #     )
-    #     print(flashcard)
-    #     flashcards.data.append(flashcard)
+    for input_expression in input_expressions:
+        flashcard = generator.generate_flashcard(
+            input_expression, input_language, output_language
+        )
+        # flashcard.image_url = generator.generate_flashcard_image(input_expression)
+        print(flashcard)
+        flashcards.data.append(flashcard)
 
-
-    print()
 if __name__ == "__main__":
     main()
