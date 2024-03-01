@@ -36,6 +36,7 @@ with open(f"{PROJECT_DIR}/pyproject.toml", "rb") as f:
 
 class Settings(BaseSettings):
     # CORE SETTINGS
+    AUTH_ENABLED: bool = True
     SECRET_KEY: str
     ENVIRONMENT: Literal["DEV", "PYTEST", "STG", "PRD"] = "DEV"
     SECURITY_BCRYPT_ROUNDS: int = 12

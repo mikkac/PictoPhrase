@@ -1,3 +1,4 @@
+import os
 import time
 from collections.abc import AsyncGenerator
 
@@ -19,7 +20,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_current_user(
+async def real_auth_dependency(
     session: AsyncSession = Depends(get_session), token: str = Depends(reusable_oauth2)
 ) -> User:
     try:
@@ -52,3 +53,18 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     return user
+
+
+
+async def fake_auth_dependency(
+    session: AsyncSession = Depends(get_session), token: str = Depends(reusable_oauth2)
+) -> User:
+    return None
+
+def get_current_user(
+    session: AsyncSession = Depends(get_session), token: str = Depends(reusable_oauth2)
+) -> User:
+    if config.settings.AUTH_ENABLED:
+        return Depends(real_auth_dependency)
+    else:
+        return Depends(fake_auth_dependency)
