@@ -1,7 +1,9 @@
 fastapi[all]
 uvicorn
 python-jose[cryptography]
+uvicorn[standard]
 bcrypt==4.0.1
 passlib
 python-multipart
-SQLAlchemy
+sqlalchemy
+psycopg2-binary
