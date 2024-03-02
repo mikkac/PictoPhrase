@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     TEST_DATABASE_DB: str = "postgres"
 
     # FIRST SUPERUSER
-    FIRST_SUPERUSER_EMAIL: EmailStr
+    FIRST_SUPERUSER_NAME: str
     FIRST_SUPERUSER_PASSWORD: str
 
     @computed_field
