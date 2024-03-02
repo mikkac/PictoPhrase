@@ -10,7 +10,7 @@ ENV PATH="/venv/bin:$PATH"
 
 # Copy the rest of app
 COPY app app
-COPY pyproject.toml requirements.txt ./
+COPY pyproject.toml requirements.txt init.sh ./
 
 # Install app
 RUN pip install -r requirements.txt
@@ -21,5 +21,6 @@ RUN addgroup --gid 1001 --system uvicorn && \
 
 # Run init.sh script then start uvicorn
 RUN chown -R uvicorn:uvicorn /build
-CMD runuser -u uvicorn -- /venv/bin/uvicorn app.main:app --app-dir /build --host 0.0.0.0 --port 8000 --workers 2 --loop uvloop --log-level debug
+CMD bash init.sh && \
+    runuser -u uvicorn -- /venv/bin/uvicorn app.main:app --app-dir /build --host 0.0.0.0 --port 8000 --workers 2 --loop uvloop --log-level debug
 EXPOSE 8000
